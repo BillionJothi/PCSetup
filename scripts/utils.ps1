@@ -1,87 +1,74 @@
-# utils.ps1
-
-function Load-Settings {
-    $settingsPath = "$PSScriptRoot\..\configs\settings.json"
-    if (-not (Test-Path $settingsPath)) { throw "settings.json not found at $settingsPath" }
-    return Get-Content $settingsPath | ConvertFrom-Json
+function Load-Settings($path) {
+    if (-not (Test-Path $path)) {
+        throw "Settings file not found at $path"
+    }
+    return Get-Content $path | ConvertFrom-Json
 }
 
-function Backup-JSON {
-    param ($file, $settings)
-    $backupDir = Resolve-Path (Join-Path $PSScriptRoot $settings.folders.backups)
-    if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir | Out-Null }
-
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $backupFile = Join-Path $backupDir ("packages_" + $env:COMPUTERNAME + "_$timestamp.json")
-    Copy-Item $file $backupFile -Force
-    Write-Host "🧾 Backup saved: $backupFile"
+function Ensure-Folders($settings) {
+    $settings.folders.PSObject.Properties | ForEach-Object {
+        $folderPath = (Resolve-Path -Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) $_.Value -ErrorAction SilentlyContinue)) -ErrorAction SilentlyContinue
+        if (-not (Test-Path $folderPath)) {
+            New-Item -ItemType Directory -Force -Path $folderPath | Out-Null
+        }
+    }
 }
 
-function Start-Log {
-    param ($mode, $settings)
-    $logDir = Resolve-Path (Join-Path $PSScriptRoot $settings.folders.logs)
-    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+function Backup-JSON($packagePath, $settings) {
+    if (Test-Path $packagePath) {
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $computerName = $env:COMPUTERNAME
+        $backupName = "packages_${computerName}_$timestamp.json"
+        $backupFile = Join-Path (Resolve-Path $settings.folders.backups) $backupName
+        Copy-Item $packagePath $backupFile
+        Write-Host "🧾 Backup saved: $backupFile"
+        Rotate-Backups $settings
+    }
+}
 
+function Start-Log($mode, $settings) {
+    $logDir = Resolve-Path $settings.folders.logs
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $logFile = Join-Path $logDir ("$env:COMPUTERNAME-$mode-$timestamp.log")
-    "[$(Get-Date)] === $mode session started ===" | Out-File $logFile -Encoding UTF8
+    $logFile = Join-Path $logDir "$($env:COMPUTERNAME)_${mode}_$timestamp.log"
+    New-Item -Path $logFile -ItemType File -Force | Out-Null
     return $logFile
 }
 
-function Write-Log {
-    param ($msg, $file)
-    "[$(Get-Date -Format 'HH:mm:ss')] $msg" | Tee-Object -FilePath $file -Append
+function Write-Log($message, $logFile) {
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $entry = "[$timestamp] $message"
+    Add-Content -Path $logFile -Value $entry
+    Write-Host $entry
 }
 
-function Check-Command {
-    param ($cmd)
+function Rotate-Backups($settings) {
+    $backupDir = Resolve-Path $settings.folders.backups
+    $max = $settings.retention.maxBackupFiles
+    $files = Get-ChildItem $backupDir | Sort-Object LastWriteTime -Descending
+    if ($files.Count -gt $max) {
+        $files | Select-Object -Skip $max | Remove-Item -Force
+    }
+}
+
+function Check-Command($cmd) {
     return (Get-Command $cmd -ErrorAction SilentlyContinue) -ne $null
 }
 
-function Request-Restart {
-    param ($logFile)
-    Write-Log "🔁 Restart is required. Prompting user..." $logFile
-    $restart = Read-Host "Restart now? (Y/N)"
-    if ($restart -match '^[Yy]') { Restart-Computer -Force }
-    else { Write-Log "Restart skipped by user." $logFile }
-}
-
-function Show-Summary {
-    param ($summary, $logFile, $settings)
+function Show-Summary($summary, $logFile) {
     Write-Host "`n=== Summary ==="
     foreach ($item in $summary.Keys) {
-        Write-Host ("{0}: {1}" -f $item, $summary[$item])
+        Write-Host "$item: $($summary[$item])"
     }
     Write-Log "Summary complete." $logFile
-
-    if ($settings.notifications.showToast -and (Check-Command "New-BurntToastNotification")) {
-        $title = "SetupAutomation Summary"
-        $msg = ($summary.Keys | ForEach-Object { "$_ → $($summary[$_])" }) -join "`n"
-        New-BurntToastNotification -Text $title, $msg
-    }
 }
 
-function Cleanup-OldFiles {
-    param ($settings, $logFile)
-    Write-Log "🧹 Running cleanup process..." $logFile
-    $now = Get-Date
-
-    $folders = @(
-        @{ Path = (Join-Path $PSScriptRoot $settings.folders.logs);  Max = $settings.retention.maxLogFiles;  Days = $settings.retention.logDays },
-        @{ Path = (Join-Path $PSScriptRoot $settings.folders.backups); Max = $settings.retention.maxBackupFiles; Days = $settings.retention.backupDays }
-    )
-
-    foreach ($f in $folders) {
-        if (Test-Path $f.Path) {
-            $files = Get-ChildItem $f.Path -File | Sort-Object LastWriteTime -Descending
-            $oldFiles = @($files | Where-Object { ($now - $_.LastWriteTime).Days -gt $f.Days }) +
-                        @($files | Select-Object -Skip $f.Max)
-
-            foreach ($file in $oldFiles) {
-                Write-Log "🗑 Deleting old file: $($file.FullName)" $logFile
-                Remove-Item $file.FullName -Force
-            }
-        }
+function Request-Restart($logFile) {
+    Write-Host "⚠️ System restart required."
+    $answer = Read-Host "Restart now? (y/n)"
+    if ($answer -eq "y") {
+        Write-Log "Restarting system..." $logFile
+        Restart-Computer -Force
+    } else {
+        Write-Log "User chose not to restart." $logFile
     }
-    Write-Log "Cleanup completed." $logFile
 }
