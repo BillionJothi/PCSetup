@@ -1,0 +1,20 @@
+{
+  "folders": {
+    "logs": "..\\logs",
+    "backups": "..\\backups",
+    "packages": "..\\configs\\packages.json"
+  },
+  "retention": {
+    "logDays": 14,
+    "backupDays": 30,
+    "maxLogFiles": 10,
+    "maxBackupFiles": 10
+  },
+  "notifications": {
+    "showToast": true
+  },
+  "cleanup": {
+    "clearTempFiles": true,
+    "clearPackageCaches": true
+  }
+}

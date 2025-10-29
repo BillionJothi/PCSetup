@@ -1,0 +1,42 @@
+**********************
+PowerShell transcript start
+Start time: 20251029222203
+Username: Thinkpad-T14G1\DJothi
+RunAs User: Thinkpad-T14G1\DJothi
+Configuration Name: 
+Machine: THINKPAD-T14G1 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe\pwsh.dll
+Process ID: 14780
+PSVersion: 7.5.4
+PSEdition: Core
+GitCommitId: 7.5.4
+OS: Microsoft Windows 10.0.26200
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+Transcript started, output file is C:\SetupAutomation\scripts\..\logs\THINKPAD-T14G1-20251029_222203.log
+🧰 Starting automated setup for THINKPAD-T14G1...
+Reading package list from C:\SetupAutomation\scripts\..\config\packages.json
+Checking 7-Zip (7zip.7zip)...
+✅ Already installed: 7-Zip
+Checking DiskGenius (Eassos.DiskGenius)...
+✅ Already installed: DiskGenius
+Checking Git (Git.Git)...
+✅ Already installed: Git
+Checking Google Chrome (Google.Chrome)...
+✅ Already installed: Google Chrome
+Checking UniGetUI (formerly WingetUI) (MartiCliment.UniGetUI)...
+✅ Already installed: UniGetUI (formerly WingetUI)
+Checking Notepad++ (Notepad++.Notepad++)...
+✅ Already installed: Notepad++
+Checking VLC media player (VideoLAN.VLC)...
+✅ Already installed: VLC media player
+
+🎉 All done!
+**********************
+PowerShell transcript end
+End time: 20251029222229
+**********************

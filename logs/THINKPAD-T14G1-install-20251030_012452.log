@@ -1,0 +1,10 @@
+[10/30/2025 01:24:52] === install session started ===
+[01:24:52] === Starting install process ===
+[01:24:55] 🪟 Checking Windows Updates...
+[01:24:55] Installing PSWindowsUpdate module...
+[01:25:30] ❌ Windows Update failed: No match was found for the specified search criteria and module name 'PSWindowsUpdate'. Try Get-PSRepository to see all available registered module repositories.
+[01:25:30] ✅ Completed install process for selected sources.
+[01:25:30] 🧹 Running cleanup process...
+[01:25:30] Cleanup completed.
+[01:25:30] 💤 No restart required.
+[01:25:30] Summary complete.

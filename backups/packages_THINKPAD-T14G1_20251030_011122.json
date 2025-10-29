@@ -1,0 +1,56 @@
+{
+  "export_version": 3,
+  "packages": [
+    {
+      "Id": "7zip.7zip",
+      "Name": "7-Zip",
+      "Version": "25.01",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "Eassos.DiskGenius",
+      "Name": "DiskGenius",
+      "Version": "Unknown",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "Git.Git",
+      "Name": "Git",
+      "Version": "2.51.0",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "Google.Chrome",
+      "Name": "Google Chrome",
+      "Version": "141.0.7390.123",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "MartiCliment.UniGetUI",
+      "Name": "UniGetUI (formerly WingetUI)",
+      "Version": "3.3.5",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "Notepad\u002B\u002B.Notepad\u002B\u002B",
+      "Name": "Notepad\u002B\u002B",
+      "Version": "8.8.6",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    },
+    {
+      "Id": "VideoLAN.VLC",
+      "Name": "VLC media player",
+      "Version": "3.0.21",
+      "Source": "winget",
+      "ManagerName": "Winget"
+    }
+  ],
+  "incompatible_packages_info": "Incompatible packages cannot be installed from UniGetUI, either because they came from a local source (for example Local PC) or because the package manager was unavailable. Nevertheless, they have been listed here for logging purposes.",
+  "incompatible_packages": []
+}
