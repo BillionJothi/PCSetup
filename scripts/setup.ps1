@@ -1,51 +1,26 @@
-<#
-.SYNOPSIS
-  Main entry script for PC setup automation.
-#>
+# ==============================================
+# setup.ps1 - Entry Script
+# ==============================================
 
-$ErrorActionPreference = "Stop"
+# Import Utilities
+. "$PSScriptRoot\utils.ps1"
 
-# Import utilities
-$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-. "$scriptRoot\utils.ps1"
+# Backup package list
+Backup-JSON (Join-Path $PSScriptRoot "..\configs\packages.json")
 
-# Load settings
-$settings = Load-Settings "..\configs\settings.json"
-
-# Create folders if not exist
-Ensure-Folders $settings
-
-# Backup current packages.json
-Backup-JSON $settings.folders.packages $settings
-
-# Prompt user for action
-Write-Host "Choose an action: (I)nstall, (U)pdate, (C)leanup, or (Q)uit"
-$choice = Read-Host "Enter your choice"
-
-switch ($choice.ToLower()) {
-    "i" {
-        $logFile = Start-Log "install" $settings
-        Write-Log "=== Starting install process ===" $logFile
-        & "$scriptRoot\install.ps1" $settings $logFile
+# Choose mode
+$mode = Read-Host "Choose action: (I)nstall or (U)pdate"
+switch ($mode.ToUpper()) {
+    "I" {
+        & "$PSScriptRoot\install.ps1"
     }
-    "u" {
-        $logFile = Start-Log "update" $settings
-        Write-Log "=== Starting update process ===" $logFile
-        & "$scriptRoot\update.ps1" $settings $logFile
+    "U" {
+        & "$PSScriptRoot\update.ps1"
     }
-    "c" {
-        $logFile = Start-Log "cleanup" $settings
-        Write-Log "=== Starting cleanup process ===" $logFile
-        & "$scriptRoot\cleanup.ps1" $settings $logFile
-    }
-    "q" {
-        Write-Host "Goodbye!"
-        exit
-    }
-    Default {
-        Write-Host "❌ Invalid option. Please choose I, U, or C."
+    default {
+        Write-Host "❌ Invalid option. Exiting."
     }
 }
 
-Write-Log "✅ Completed selected process." $logFile
-Show-Summary $global:summary $logFile
+# Run cleanup
+Run-RetentionCleanup

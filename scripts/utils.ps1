@@ -1,74 +1,119 @@
-function Load-Settings($path) {
-    if (-not (Test-Path $path)) {
-        throw "Settings file not found at $path"
+# ==============================================
+# utils.ps1 - Common Utility Functions
+# ==============================================
+
+function Load-Settings {
+    param([string]$SettingsPath)
+
+    if (-not (Test-Path $SettingsPath)) {
+        throw "Settings file not found at $SettingsPath"
     }
-    return Get-Content $path | ConvertFrom-Json
+
+    try {
+        $json = Get-Content -Path $SettingsPath -Raw | ConvertFrom-Json
+        return $json
+    } catch {
+        throw "Failed to parse settings.json: $($_.Exception.Message)"
+    }
 }
 
-function Ensure-Folders($settings) {
-    $settings.folders.PSObject.Properties | ForEach-Object {
-        $folderPath = (Resolve-Path -Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) $_.Value -ErrorAction SilentlyContinue)) -ErrorAction SilentlyContinue
-        if (-not (Test-Path $folderPath)) {
-            New-Item -ItemType Directory -Force -Path $folderPath | Out-Null
+# --- Determine Script Directory ---
+$scriptDir = Split-Path -Parent $PSCommandPath
+if (-not $scriptDir) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
+# --- Load Settings ---
+$settingsPath = Join-Path $scriptDir "..\configs\settings.json"
+$global:Settings = Load-Settings $settingsPath
+
+# --- Folder Setup ---
+$global:LogsDir = Join-Path $scriptDir $Settings.folders.logs
+$global:BackupsDir = Join-Path $scriptDir $Settings.folders.backups
+New-Item -ItemType Directory -Force -Path $LogsDir, $BackupsDir | Out-Null
+
+# --- Logging Functions ---
+function Start-Log {
+    param([string]$mode)
+
+    $pc = $env:COMPUTERNAME
+    $timestamp = (Get-Date -Format "yyyyMMdd_HHmmss")
+    $logFile = Join-Path $LogsDir "${pc}_${mode}_${timestamp}.log"
+
+    Write-Host "🧾 Logging to: $logFile"
+    New-Item -ItemType File -Force -Path $logFile | Out-Null
+    return $logFile
+}
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [string]$LogFile
+    )
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $line = "[$timestamp] $Message"
+    Add-Content -Path $LogFile -Value $line
+    Write-Host $line
+}
+
+# --- Toast Notification ---
+function Show-Toast {
+    param([string]$Message)
+    if ($Settings.notifications.showToast) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.MessageBox]::Show($Message, "Setup Notification")
+        } catch {
+            Write-Host "⚠️ Toast failed: $($_.Exception.Message)"
         }
     }
 }
 
-function Backup-JSON($packagePath, $settings) {
-    if (Test-Path $packagePath) {
+# --- Backup JSON File ---
+function Backup-JSON {
+    param([string]$FilePath)
+    if (Test-Path $FilePath) {
+        $fileName = Split-Path $FilePath -LeafBase
+        $pc = $env:COMPUTERNAME
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $computerName = $env:COMPUTERNAME
-        $backupName = "packages_${computerName}_$timestamp.json"
-        $backupFile = Join-Path (Resolve-Path $settings.folders.backups) $backupName
-        Copy-Item $packagePath $backupFile
-        Write-Host "🧾 Backup saved: $backupFile"
-        Rotate-Backups $settings
+        $dest = Join-Path $BackupsDir "${fileName}_${pc}_${timestamp}.json"
+        Copy-Item $FilePath $dest -Force
+        Write-Host "🧾 Backup saved: $dest"
     }
 }
 
-function Start-Log($mode, $settings) {
-    $logDir = Resolve-Path $settings.folders.logs
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $logFile = Join-Path $logDir "$($env:COMPUTERNAME)_${mode}_$timestamp.log"
-    New-Item -Path $logFile -ItemType File -Force | Out-Null
-    return $logFile
+# --- Check if Command Exists ---
+function Check-Command {
+    param([string]$Command)
+    return (Get-Command $Command -ErrorAction SilentlyContinue) -ne $null
 }
 
-function Write-Log($message, $logFile) {
-    $timestamp = Get-Date -Format "HH:mm:ss"
-    $entry = "[$timestamp] $message"
-    Add-Content -Path $logFile -Value $entry
-    Write-Host $entry
-}
-
-function Rotate-Backups($settings) {
-    $backupDir = Resolve-Path $settings.folders.backups
-    $max = $settings.retention.maxBackupFiles
-    $files = Get-ChildItem $backupDir | Sort-Object LastWriteTime -Descending
-    if ($files.Count -gt $max) {
-        $files | Select-Object -Skip $max | Remove-Item -Force
-    }
-}
-
-function Check-Command($cmd) {
-    return (Get-Command $cmd -ErrorAction SilentlyContinue) -ne $null
-}
-
-function Show-Summary($summary, $logFile) {
+# --- Show Summary ---
+function Show-Summary {
+    param([hashtable]$Summary, [string]$LogFile)
     Write-Host "`n=== Summary ==="
-    foreach ($item in $summary.Keys) {
-        Write-Host "$item: $($summary[$item])"
+    foreach ($item in $Summary.Keys) {
+        Write-Host "$($item): $($Summary[$item])"
     }
-    Write-Log "Summary complete." $logFile
+    Write-Log "Summary complete." $LogFile
 }
 
-function Request-Restart($logFile) {
-    Write-Host "⚠️ System restart required."
-    $answer = Read-Host "Restart now? (y/n)"
-    if ($answer -eq "y") {
-        Write-Log "Restarting system..." $logFile
-        Restart-Computer -Force
-    } else {
-        Write-Log "User chose not to restart." $logFile
+# --- Cleanup Old Files Based on Retention Settings ---
+function Cleanup-OldFiles {
+    param([string]$Folder, [int]$Days, [int]$MaxFiles)
+    $files = Get-ChildItem -Path $Folder -File | Sort-Object LastWriteTime -Descending
+    $cutoff = (Get-Date).AddDays(-$Days)
+    foreach ($file in $files) {
+        if ($file.LastWriteTime -lt $cutoff -or $files.Count -gt $MaxFiles) {
+            Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
+        }
     }
+}
+
+# --- Run Cleanup Based on Settings ---
+function Run-RetentionCleanup {
+    Write-Host "🧹 Running cleanup process..."
+    Cleanup-OldFiles $LogsDir $Settings.retention.logDays $Settings.retention.maxLogFiles
+    Cleanup-OldFiles $BackupsDir $Settings.retention.backupDays $Settings.retention.maxBackupFiles
+    Write-Host "Cleanup completed."
 }

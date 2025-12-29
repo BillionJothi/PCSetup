@@ -1,55 +1,108 @@
-param($settings, $logFile)
+# ==============================================
+# install.ps1 - App Installation (with per-PC support)
+# ==============================================
 
 . "$PSScriptRoot\utils.ps1"
 
-$packages = Get-Content $settings.folders.packages | ConvertFrom-Json
+# Start logging
+$logFile = Start-Log "install"
+Write-Log "=== Starting installation ===" $logFile
 
-foreach ($pkg in $packages) {
-    $name = $pkg.name
-    $source = $pkg.source
+# Load main packages.json
+if (-not (Test-Path $Settings.folders.packages)) {
+    Write-Log "❌ Main package file not found: $($Settings.folders.packages)" $logFile
+    exit
+}
 
-    Write-Log "📦 Checking installation for $name ($source)" $logFile
+$packages = Get-Content $Settings.folders.packages | ConvertFrom-Json
 
-    switch ($source) {
-        "winget" {
-            if (Check-Command "winget") {
-                $installed = winget list | Select-String -Pattern $name
-                if ($installed) {
-                    Write-Host "$name already installed. Reinstall? (y/n)"
-                    if ((Read-Host) -eq "y") { winget install --id $pkg.id }
-                } else {
-                    Write-Host "Install $name? (y/n)"
-                    if ((Read-Host) -eq "y") { winget install --id $pkg.id }
-                }
-            } else {
-                Write-Log "❌ winget not available." $logFile
+# Detect PC name
+$pcName = $env:COMPUTERNAME
+$perPCFile = Join-Path (Split-Path $Settings.folders.packages -Parent) "packages_${pcName}.json"
+
+if (Test-Path $perPCFile) {
+    Write-Log "🔹 Found per-PC package file: $perPCFile" $logFile
+    $perPCPackages = Get-Content $perPCFile | ConvertFrom-Json
+
+    # Merge winget packages
+    if ($perPCPackages.winget) {
+        foreach ($id in $perPCPackages.winget) {
+            $packages.packages += [PSCustomObject]@{
+                Id = $id
+                Name = $id
+                Version = "latest"
+                Source = "winget"
+                ManagerName = "Winget"
             }
         }
-        "scoop" {
-            if (Check-Command "scoop") {
-                if (scoop list $name -ErrorAction SilentlyContinue) {
-                    Write-Host "$name already installed. Reinstall? (y/n)"
-                    if ((Read-Host) -eq "y") { scoop install $name -g }
-                } else {
-                    Write-Host "Install $name? (y/n)"
-                    if ((Read-Host) -eq "y") { scoop install $name -g }
-                }
-            } else {
-                Write-Log "❌ scoop not available." $logFile
+    }
+
+    # Merge choco packages if any
+    if ($perPCPackages.choco) {
+        foreach ($id in $perPCPackages.choco) {
+            $packages.packages += [PSCustomObject]@{
+                Id = $id
+                Name = $id
+                Version = "latest"
+                Source = "choco"
+                ManagerName = "Chocolatey"
             }
         }
-        "choco" {
-            if (Check-Command "choco") {
-                if (choco list --local-only | Select-String -Pattern $name) {
-                    Write-Host "$name already installed. Reinstall? (y/n)"
-                    if ((Read-Host) -eq "y") { choco install $name -y }
-                } else {
-                    Write-Host "Install $name? (y/n)"
-                    if ((Read-Host) -eq "y") { choco install $name -y }
-                }
-            } else {
-                Write-Log "❌ Chocolatey not available." $logFile
+    }
+
+    # Merge scoop packages if any
+    if ($perPCPackages.scoop) {
+        foreach ($id in $perPCPackages.scoop) {
+            $packages.packages += [PSCustomObject]@{
+                Id = $id
+                Name = $id
+                Version = "latest"
+                Source = "scoop"
+                ManagerName = "Scoop"
             }
         }
     }
 }
+
+# Remove duplicates by Id
+$packagesToInstall = $packages.packages | Sort-Object Id -Unique
+
+# Install packages
+foreach ($pkg in $packagesToInstall) {
+    try {
+        switch ($pkg.ManagerName) {
+            "Winget" {
+                if (Check-Command "winget") {
+                    Write-Log "📦 Installing $($pkg.Name) via winget..." $logFile
+                    winget install --id $pkg.Id -e --accept-source-agreements --accept-package-agreements
+                } else {
+                    Write-Log "⚠️ Winget not found, skipping $($pkg.Name)" $logFile
+                }
+            }
+            "Chocolatey" {
+                if (Check-Command "choco") {
+                    Write-Log "📦 Installing $($pkg.Name) via choco..." $logFile
+                    choco install $pkg.Id -y
+                } else {
+                    Write-Log "⚠️ Chocolatey not found, skipping $($pkg.Name)" $logFile
+                }
+            }
+            "Scoop" {
+                if (Check-Command "scoop") {
+                    Write-Log "📦 Installing $($pkg.Name) via scoop..." $logFile
+                    scoop install $pkg.Id
+                } else {
+                    Write-Log "⚠️ Scoop not found, skipping $($pkg.Name)" $logFile
+                }
+            }
+            default {
+                Write-Log "⚠️ Unknown manager $($pkg.ManagerName) for $($pkg.Name), skipping..." $logFile
+            }
+        }
+    } catch {
+        Write-Log "❌ Error installing $($pkg.Name): $($_.Exception.Message)" $logFile
+    }
+}
+
+Write-Log "✅ Installation complete." $logFile
+Show-Summary @{ "winget" = "Done"; "choco" = "Done"; "scoop" = "Done" } $logFile

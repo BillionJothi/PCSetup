@@ -1,0 +1,10 @@
+{
+  "winget": [
+    "Lenovo.Vantage",
+    "Lenovo.SystemUpdate"
+  ],
+  "choco": [
+    "amd-software-adrenalin-edition"
+  ],
+  "scoop": []
+}
