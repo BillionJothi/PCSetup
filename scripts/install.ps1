@@ -1,104 +1,83 @@
 # ==============================================
-# install.ps1 - App Installation (with per-PC support)
+# install.ps1 - App Installation with Elevation Handling and Per-PC Packages
 # ==============================================
 
 . "$PSScriptRoot\utils.ps1"
 
-# Start logging
 $logFile = Start-Log "install"
 Write-Log "=== Starting installation ===" $logFile
 
-# Load main packages.json
-if (-not (Test-Path $Settings.folders.packages)) {
-    Write-Log "❌ Main package file not found: $($Settings.folders.packages)" $logFile
-    exit
+# Load global packages
+$globalPackages = @()
+if (Test-Path $Settings.folders.packages) {
+    $globalPackages = Get-Content $Settings.folders.packages | ConvertFrom-Json
 }
-
-$packages = Get-Content $Settings.folders.packages | ConvertFrom-Json
 
 # Detect PC name
 $pcName = $env:COMPUTERNAME
-$perPCFile = Join-Path (Split-Path $Settings.folders.packages -Parent) "packages_${pcName}.json"
+$pcJsonPath = Join-Path (Split-Path $Settings.folders.packages -Parent) "packages_$pcName.json"
 
-if (Test-Path $perPCFile) {
-    Write-Log "🔹 Found per-PC package file: $perPCFile" $logFile
-    $perPCPackages = Get-Content $perPCFile | ConvertFrom-Json
-
-    # Merge winget packages
-    if ($perPCPackages.winget) {
-        foreach ($id in $perPCPackages.winget) {
-            $packages.packages += [PSCustomObject]@{
-                Id = $id
-                Name = $id
-                Version = "latest"
-                Source = "winget"
-                ManagerName = "Winget"
-            }
-        }
-    }
-
-    # Merge choco packages if any
-    if ($perPCPackages.choco) {
-        foreach ($id in $perPCPackages.choco) {
-            $packages.packages += [PSCustomObject]@{
-                Id = $id
-                Name = $id
-                Version = "latest"
-                Source = "choco"
-                ManagerName = "Chocolatey"
-            }
-        }
-    }
-
-    # Merge scoop packages if any
-    if ($perPCPackages.scoop) {
-        foreach ($id in $perPCPackages.scoop) {
-            $packages.packages += [PSCustomObject]@{
-                Id = $id
-                Name = $id
-                Version = "latest"
-                Source = "scoop"
-                ManagerName = "Scoop"
-            }
-        }
-    }
+# Load per-PC packages
+$pcPackages = @()
+if (Test-Path $pcJsonPath) {
+    $pcPackages = Get-Content $pcJsonPath | ConvertFrom-Json
+    Write-Log "✅ Loaded per-PC packages for $pcName" $logFile
+} else {
+    Write-Log "⚠️ No per-PC packages found for $pcName" $logFile
 }
 
-# Remove duplicates by Id
-$packagesToInstall = $packages.packages | Sort-Object Id -Unique
+# Merge packages
+$packages = @{
+    "packages" = @($globalPackages.packages + $pcPackages.packages)
+}
 
-# Install packages
-foreach ($pkg in $packagesToInstall) {
+# List of packages requiring elevation
+$requiresElevation = @("amd-software-adrenalin-edition")
+
+# Install each package
+foreach ($pkg in $packages.packages) {
     try {
-        switch ($pkg.ManagerName) {
-            "Winget" {
+        switch ($pkg.ManagerName.ToLower()) {
+
+            "winget" {
                 if (Check-Command "winget") {
-                    Write-Log "📦 Installing $($pkg.Name) via winget..." $logFile
+                    Write-Log "📦 Installing $($pkg.Name) via Winget..." $logFile
                     winget install --id $pkg.Id -e --accept-source-agreements --accept-package-agreements
                 } else {
-                    Write-Log "⚠️ Winget not found, skipping $($pkg.Name)" $logFile
+                    Write-Log "⚠️ Winget not installed. Skipping $($pkg.Name)." $logFile
                 }
             }
-            "Chocolatey" {
+
+            "choco" {
                 if (Check-Command "choco") {
-                    Write-Log "📦 Installing $($pkg.Name) via choco..." $logFile
-                    choco install $pkg.Id -y
+
+                    if ($requiresElevation -contains $pkg.Id.ToLower()) {
+                        Write-Log "⚡ $($pkg.Name) requires elevation. Launching elevated..." $logFile
+                        Start-Process "choco" -ArgumentList "install $($pkg.Id) -y --confirm" -Verb RunAs -Wait
+                    } else {
+                        Write-Log "📦 Installing $($pkg.Name) via Chocolatey..." $logFile
+                        choco install $($pkg.Id) -y --confirm
+                    }
+
                 } else {
-                    Write-Log "⚠️ Chocolatey not found, skipping $($pkg.Name)" $logFile
+                    Write-Log "⚠️ Chocolatey not installed. Skipping $($pkg.Name)." $logFile
                 }
             }
-            "Scoop" {
+
+            "scoop" {
                 if (Check-Command "scoop") {
-                    Write-Log "📦 Installing $($pkg.Name) via scoop..." $logFile
+                    Write-Log "📦 Installing $($pkg.Name) via Scoop..." $logFile
                     scoop install $pkg.Id
                 } else {
-                    Write-Log "⚠️ Scoop not found, skipping $($pkg.Name)" $logFile
+                    Write-Log "⚠️ Scoop not installed. Skipping $($pkg.Name)." $logFile
                 }
             }
+
             default {
-                Write-Log "⚠️ Unknown manager $($pkg.ManagerName) for $($pkg.Name), skipping..." $logFile
+                Write-Log "⚠️ Unknown package manager '$($pkg.ManagerName)' for $($pkg.Name). Skipping." $logFile
             }
         }
+
     } catch {
         Write-Log "❌ Error installing $($pkg.Name): $($_.Exception.Message)" $logFile
     }

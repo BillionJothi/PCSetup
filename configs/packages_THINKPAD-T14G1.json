@@ -1,10 +1,9 @@
 {
-  "winget": [
-    "Lenovo.Vantage",
-    "Lenovo.SystemUpdate"
-  ],
-  "choco": [
-    "amd-software-adrenalin-edition"
-  ],
-  "scoop": []
+  "packages": [
+    {
+      "Id": "Lenovo.SystemUpdate",
+      "Name": "Lenovo System Update",
+      "ManagerName": "winget"
+    }
+  ]
 }
