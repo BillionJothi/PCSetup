@@ -4,6 +4,16 @@
       "Id": "Lenovo.SystemUpdate",
       "Name": "Lenovo System Update",
       "ManagerName": "winget"
-    }
+    },
+	 {
+      "Id": "9WZDNCRFJ4MV",
+      "Name": "Lenovo Vantage",
+      "ManagerName": "Winget"
+    },
+	{
+      "Id": "Lenovo.ServiceBridge",
+      "Name": "Lenovo Service Bridge",
+      "ManagerName": "Winget"
+    },
   ]
 }

@@ -12,6 +12,7 @@ Backup-JSON (Join-Path $PSScriptRoot "..\configs\packages.json")
 $mode = Read-Host "Choose action: (I)nstall or (U)pdate"
 switch ($mode.ToUpper()) {
     "I" {
+		& "$PSScriptRoot\windows-features.ps1"
         & "$PSScriptRoot\install.ps1"
     }
     "U" {

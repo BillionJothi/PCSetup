@@ -1,0 +1,9 @@
+{
+  "features": [
+    {
+      "Name": "NetFx3",
+      "Description": ".NET Framework 3.5 (includes 2.0 and 3.0)",
+      "RestartRequired": false
+    }
+  ]
+}
